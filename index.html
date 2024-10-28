@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>内容助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .markdown-preview blockquote {
+            border-left: 4px solid #e5e7eb;
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #4b5563;
+        }
+        .markdown-preview hr {
+            margin: 2rem 0;
+            border-top: 2px solid #e5e7eb;
+        }
+        .tab-active {
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-6xl mx-auto p-4">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">内容助手</h1>
+            <p class="text-gray-600 mt-2">排版助手 & 链接分类</p>
+        </header>
+
+        <!-- 标签页切换 -->
+        <div class="flex gap-8 mb-6 border-b">
+            <button id="formatTab" class="px-4 py-2 tab-active">排版助手</button>
+            <button id="linkTab" class="px-4 py-2">链接分类</button>
+        </div>
+
+        <!-- 排版助手面板 -->
+        <div id="formatPanel" class="grid md:grid-cols-2 gap-6">
+            <div class="space-y-4">
+                <textarea 
+                    id="formatInput" 
+                    class="w-full h-[500px] p-4 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 resize-none"
+                    placeholder="请输入需要排版的摘抄内容..."></textarea>
+                <div class="flex gap-4">
+                    <button id="formatBtn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+                        排版转换
+                    </button>
+                    <button id="formatCopyBtn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors">
+                        复制结果
+                    </button>
+                </div>
+            </div>
+            <div id="formatPreview" class="markdown-preview bg-white p-4 rounded-lg border border-gray-300 min-h-[500px]"></div>
+        </div>
+
+        <!-- 链接分类面板 -->
+        <div id="linkPanel" class="grid md:grid-cols-2 gap-6 hidden">
+            <div class="space-y-4">
+                <textarea 
+                    id="linkInput" 
+                    class="w-full h-[500px] p-4 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 resize-none"
+                    placeholder="请输入需要分类的链接，每行一个..."></textarea>
+                <div class="flex gap-4">
+                    <button id="linkBtn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+                        分类整理
+                    </button>
+                    <button id="linkCopyBtn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors">
+                        复制结果
+                    </button>
+                </div>
+            </div>
+            <div id="linkPreview" class="markdown-preview bg-white p-4 rounded-lg border border-gray-300 min-h-[500px]"></div>
+        </div>
+    </div>
+
+    <script>
+        const SYSTEM_PROMPT = `你是一个专业的排版助手。请严格按照以下规则处理用户输入的摘抄内容：
+
+规则说明：
+1. 使用 Markdown 引用格式处理每段摘抄内容
+2. 每段摘抄内容必须用引号包裹
+3. 每段摘抄必须标注统一的来源格式
+4. 多段摘抄之间使用分隔线分开
+5. 对重复的摘抄内容进行去重处理
+6. 移除多余的空格和换行
+
+格式要求：
+> "摘抄内容"
+— [来源](来源链接)
+
+---
+
+注意事项：
+- 保持原文内容不变
+- 不要添加任何额外解释或评论
+- 确保引号、破折号等标点符号格式统一
+- 分隔线前后只保留一个空行
+- 自动合并重复的摘抄内容
+- 清理不必要的空白字符
+
+示例输出：
+> "人生就像一盒巧克力，你永远不知道下一颗是什么味道。"
+— [来源](https://example.com/source)
+
+---
+
+> "不要等待机会，而要创造机会。"
+— [来源](https://example.com/source)`;
+
+        async function formatText(text) {
+            const response = await fetch('https://mute-rice-330c.suoliweng2099.workers.dev', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: "system",
+                            content: SYSTEM_PROMPT
+                        },
+                        {
+                            role: "user",
+                            content: text
+                        }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('格式化失败');
+            }
+
+            const data = await response.json();
+            return data.result.response;
+        }
+
+        document.getElementById('formatBtn').addEventListener('click', async () => {
+            const input = document.getElementById('formatInput');
+            const preview = document.getElementById('formatPreview');
+            const formatBtn = document.getElementById('formatBtn');
+
+            if (!input.value) {
+                preview.innerHTML = '<p class="text-red-500">请输入内容</p>';
+                return;
+            }
+
+            try {
+                formatBtn.disabled = true;
+                formatBtn.textContent = '处理中...';
+                const formattedText = await formatText(input.value);
+                preview.innerHTML = marked.parse(formattedText);
+                localStorage.setItem('lastFormatted', formattedText);
+            } catch (error) {
+                preview.innerHTML = `<p class="text-red-500">格式化失败：${error.message}</p>`;
+            } finally {
+                formatBtn.disabled = false;
+                formatBtn.textContent = '排版转换';
+            }
+        });
+
+        document.getElementById('formatCopyBtn').addEventListener('click', async () => {
+            const formattedText = localStorage.getItem('lastFormatted');
+            if (!formattedText) {
+                alert('没有可复制的内容');
+                return;
+            }
+            await navigator.clipboard.writeText(formattedText);
+            const copyBtn = document.getElementById('formatCopyBtn');
+            copyBtn.textContent = '已复制！';
+            setTimeout(() => {
+                copyBtn.textContent = '复制结果';
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
